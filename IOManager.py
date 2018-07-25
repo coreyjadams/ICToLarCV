@@ -2,9 +2,63 @@ import os
 
 import numpy
 
-from invisible_cities.io import pmaps_io
-from invisible_cities.io import run_and_event_io
-from invisible_cities.io import mchits_io
+import h5py
+
+class MCReader(object):
+
+    def __init__(self, mc_group):
+        super(MCReader, self).__init__()
+        self._group = mc_group
+
+        # Read the extents:
+        self._extents = self._group['extents']
+
+        # The list of events is in the extents table:
+        self._events    = self._extents['evt_number']
+        self._hits      = self._group['hits']
+        self._particles = self._group['particles']
+        self._n_entries = len(self._events)
+
+    def get_events(self, event):
+        return events
+
+    def get_entry_from_event(self, event):
+        try:
+            return numpy.where(self._events == event)[0][0]
+        except:
+            raise Exception("Event {} not found in the file".format(event))
+
+    def get_hits(self, event):
+
+        entry = self.get_entry_from_event(event)
+
+        if entry == 0:
+            min_hit = 0
+        else:
+            min_hit = int(self._extents[entry-1]['last_hit'] + 1)
+
+        max_hit = int(self._extents[entry]['last_hit'])
+
+        # Get the slice of hits:
+        hits = self._hits[min_hit:max_hit]
+        return hits
+
+    def get_particles(self,event):
+
+        entry = self.get_entry_from_event(event)
+
+        if entry == 0:
+            min_particle = 0
+        else:
+            min_particle = int(self._extents[entry-1]['last_particle'] + 1)
+
+        max_particle = int(self._extents[entry]['last_particle'])
+
+        # Get the slice of hits:
+        particles = self._particles[min_particle:max_particle]
+        return particles
+
+
 
 
 class IOManager(object):
@@ -20,7 +74,9 @@ class IOManager(object):
 
         # Current entry in the above list
         self._current_entry = 0
-
+        self._file = None
+        self._mc = None
+        self._pmaps = None
 
     def event(self):
         """Get the data from the current event
@@ -59,6 +115,7 @@ class IOManager(object):
         """Read the run and event info from the files
 
         """
+
         return run_and_event_io.read_run_and_event(file_name)
 
     def pmaps_read(self, file_name):
@@ -76,6 +133,18 @@ class IOManager(object):
         Arguments:
             file_name {str} -- path to file to open
         """
+
+        self._file = h5py.File(file_name, 'r')
+        self._mc = MCReader(self._file['MC'])
+
+        print self._mc.get_hits(1)
+        print self._mc.get_hits(2)
+
+        print self._mc.get_particles(1)
+
+        # print self._file
+        # print self._file.keys()
+        # print self._file['MC']
 
         self._runs, self._events = self.run_and_event_read(file_name)
 
