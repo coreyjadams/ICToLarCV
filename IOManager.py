@@ -19,18 +19,18 @@ class MCReader(object):
         self._particles = self._group['particles']
         self._n_entries = len(self._events)
 
-    def get_events(self, event):
+    def events(self, event):
         return events
 
-    def get_entry_from_event(self, event):
+    def entry_from_event(self, event):
         try:
             return numpy.where(self._events == event)[0][0]
         except:
             raise Exception("Event {} not found in the file".format(event))
 
-    def get_hits(self, event):
+    def hits(self, event):
 
-        entry = self.get_entry_from_event(event)
+        entry = self.entry_from_event(event)
 
         if entry == 0:
             min_hit = 0
@@ -43,9 +43,9 @@ class MCReader(object):
         hits = self._hits[min_hit:max_hit]
         return hits
 
-    def get_particles(self,event):
+    def particles(self,event):
 
-        entry = self.get_entry_from_event(event)
+        entry = self.entry_from_event(event)
 
         if entry == 0:
             min_particle = 0
@@ -57,6 +57,90 @@ class MCReader(object):
         # Get the slice of hits:
         particles = self._particles[min_particle:max_particle]
         return particles
+
+
+class PMapsReader(object):
+
+    def __init__(self, pmaps_group):
+        super(PMapsReader, self).__init__()
+        self._group = pmaps_group
+
+        print self._group
+        print self._group.keys()
+
+        self._s1    = self._group['S1']
+        self._s1Pmt = self._group['S1Pmt']
+        self._s2    = self._group['S2']
+        self._s2Pmt = self._group['S2Pmt']
+        self._s2Si  = self._group['S2Si']
+
+
+    def s1(self, event):
+
+        # Make a slice of the s1 object:
+        indexes = numpy.where(self._s1['event'] == event)[0]
+        if len(indexes) == 0:
+            return None
+        else:
+            min_index = numpy.min(indexes)
+            max_index = numpy.max(indexes) + 1
+            # This is a basic contiguiousness check (sp?  how do you spell that?)
+            assert len(indexes) == max_index - min_index
+            return self._s1[min_index:max_index]
+
+
+    def s1Pmt(self, event):
+
+        # Make a slice of the s1 object:
+        indexes = numpy.where(self._s1Pmt['event'] == event)[0]
+        if len(indexes) == 0:
+            return None
+        else:
+            min_index = numpy.min(indexes)
+            max_index = numpy.max(indexes) + 1
+            # This is a basic contiguiousness check (sp?  how do you spell that?)
+            assert len(indexes) == max_index - min_index
+            return self._s1Pmt[min_index:max_index]
+
+    def s2(self, event):
+
+        # Make a slice of the s1 object:
+        indexes = numpy.where(self._s2['event'] == event)[0]
+        if len(indexes) == 0:
+            return None
+        else:
+            min_index = numpy.min(indexes)
+            max_index = numpy.max(indexes) + 1
+            # continuity assertion:
+            assert len(indexes) == max_index - min_index
+            return self._s2[min_index:max_index]
+
+
+    def s2Pmt(self, event):
+
+        # Make a slice of the s1 object:
+        indexes = numpy.where(self._s2Pmt['event'] == event)[0]
+        if len(indexes) == 0:
+            return None
+        else:
+            min_index = numpy.min(indexes)
+            max_index = numpy.max(indexes) + 1
+            # continuity assertion:
+            assert len(indexes) == max_index - min_index
+            return self._s2Pmt[min_index:max_index]
+
+    def s2Si(self, event):
+
+        # Make a slice of the s1 object:
+        indexes = numpy.where(self._s2Si['event'] == event)[0]
+        if len(indexes) == 0:
+            return None
+        else:
+            min_index = numpy.min(indexes)
+            max_index = numpy.max(indexes) + 1
+            # continuity assertion:
+            assert len(indexes) == max_index - min_index
+            return self._s2Si[min_index:max_index]
 
 
 
@@ -136,15 +220,7 @@ class IOManager(object):
 
         self._file = h5py.File(file_name, 'r')
         self._mc = MCReader(self._file['MC'])
-
-        print self._mc.get_hits(1)
-        print self._mc.get_hits(2)
-
-        print self._mc.get_particles(1)
-
-        # print self._file
-        # print self._file.keys()
-        # print self._file['MC']
+        self._pmaps = PMapsReader(self._file['PMAPS'])
 
         self._runs, self._events = self.run_and_event_read(file_name)
 
@@ -251,7 +327,7 @@ class IOManager(object):
         event = self.event()
         return self._mc_part[event]
 
-    def get_num_events(self):
+    def num_events(self):
         """Query for the total number of events in this file
 
         Returns:
