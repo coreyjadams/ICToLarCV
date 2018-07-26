@@ -65,9 +65,6 @@ class PMapsReader(object):
         super(PMapsReader, self).__init__()
         self._group = pmaps_group
 
-        print self._group
-        print self._group.keys()
-
         self._s1    = self._group['S1']
         self._s1Pmt = self._group['S1Pmt']
         self._s2    = self._group['S2']
@@ -161,6 +158,7 @@ class IOManager(object):
         self._file = None
         self._mc = None
         self._pmaps = None
+        self._events = None
 
     def event(self):
         """Get the data from the current event
@@ -177,6 +175,9 @@ class IOManager(object):
             int -- the active entry
         """
         return self._current_entry
+
+    def entries(self):
+        return self._entries
 
     def run(self):
         """Get the run number of the current entry
@@ -195,17 +196,6 @@ class IOManager(object):
         return self._events['timestamp'][self._current_entry]
 
 
-    def run_and_event_read(self, file_name):
-        """Read the run and event info from the files
-
-        """
-
-        return run_and_event_io.read_run_and_event(file_name)
-
-    def pmaps_read(self, file_name):
-
-        return pmaps_io.load_pmaps(file_name)
-
     def set_file(self, file_name):
         """Open a new file and read it's data
 
@@ -219,56 +209,21 @@ class IOManager(object):
         """
 
         self._file = h5py.File(file_name, 'r')
+
+
+        self._runs = self._file['Run']['runInfo']
+        self._events = self._file['Run']['events']
+
+        self._current_entry = 0
+        self._max_entry = len(self._events)
+        self._entries = numpy.arange(0, self._max_entry)
+
+
         self._mc = MCReader(self._file['MC'])
         self._pmaps = PMapsReader(self._file['PMAPS'])
 
-        self._runs, self._events = self.run_and_event_read(file_name)
 
-
-        self._entries = numpy.arange(0, len(self._runs))
-
-
-        # Load the pmaps, catch exception by declaring the presence of pmaps as false
-        try:
-            # print(pmaps_io.load_pmaps(file_name).keys())
-            # pmaps dict is a dictionary of PMap objects (evm.pmaps.PMap)
-            # indexed by event number
-            self._pmap_dict = self.pmaps_read(file_name)
-
-            self._has_pmaps = True
-        except Exception as e:
-            print(e)
-            self._has_pmaps = False
-
-        # Load MC information, catch exception by declaring the presence of mc info as false
-        try:
-            self._mc_hits = mchits_io.load_mchits(file_name)
-            self._mc_part = mchits_io.load_mcparticles(file_name)
-            self._has_mc = True
-        except:
-            self._has_mc = False
-            pass
-
-        # Get the run and subrun information
-        # TODO - is there a better way to do this???
-        strs = os.path.basename(file_name).split("_")
-        i = 0
-        for s in strs:
-            if s == "pmaps":
-                break
-            i += 1
-        # There must be a way to get run and subrun information...
-        self._run = 0
-
-        self._has_reco = False
-        if not (self._has_reco or self._has_pmaps or self._has_mc):
-            raise Exception("Couldn't load file {}.".format(file_name))
-
-
-    def has_pmaps(self):
-        return self._has_pmaps
-
-    def pmap(self):
+    def pmaps(self):
         """Return the pmap object for selected entry
 
         If event is specified explicitly, check event is available and return that s2
@@ -281,14 +236,10 @@ class IOManager(object):
             PMap - evm.Pmap object
         """
 
-        if not self._has_pmaps:
-            return None
-
-        event = self.event()
-        return self._pmap_dict[event]
+        return self._pmaps
 
 
-    def mchits(self):
+    def mc(self):
         """Return mchit objects
 
         If event is specified explicitly, check event is available and return that mchits
@@ -302,30 +253,8 @@ class IOManager(object):
         """
 
 
-        if not self._has_mc:
-            print("This file does not have mc information.")
-            return None
+        return self._mc
 
-        event = self.event()
-        return self._mc_hits[event]
-
-    def mctracks(self, event=-1):
-        """Return mctrack objects
-
-        If event is specified explicitly, check event is available and return that mctrack
-        Otherwise, return mctrack for currently active event
-
-        Keyword Arguments:
-            event {number} -- [description] (default: {-1})
-
-        Returns:
-            mctrack -- mctrack object
-        """
-        if not self._has_mc:
-            print("This file does not have mc information.")
-            return None
-        event = self.event()
-        return self._mc_part[event]
 
     def num_events(self):
         """Query for the total number of events in this file
@@ -333,7 +262,7 @@ class IOManager(object):
         Returns:
             int -- Total number of events
         """
-        return len(self._events)
+        return _max_entry
 
     def go_to_entry(self,entry):
         """Move the current index to the specified entry
