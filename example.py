@@ -108,6 +108,14 @@ def save_pmaps(pmaps, larcv_voxel, meta):
     # print pmaps.s2Pmt()
     # print pmaps.s2Si()
 
+    # The code that parses pmaps for visualization is here:
+    # https://github.com/coreyjadams/IC/blob/master/invisible_cities/viewer/datatypes/PMap.py#L80-L89
+
+    # A lot of the functions there are not implemented for the hacked IO of the hdf5 files
+    # We will have to figure them out
+
+
+
     # larcv_voxel.emplace(x=1,y=2,z=3,val=4)
     larcv_voxel.emplace(1,2,3,4)
 
