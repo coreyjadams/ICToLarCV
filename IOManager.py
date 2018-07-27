@@ -70,9 +70,12 @@ class PMapsReader(object):
         self._s2    = self._group['S2']
         self._s2Pmt = self._group['S2Pmt']
         self._s2Si  = self._group['S2Si']
+        self._event = None
 
+    def s1(self, event=None):
 
-    def s1(self, event):
+        if event is None:
+            event = self._event
 
         # Make a slice of the s1 object:
         indexes = numpy.where(self._s1['event'] == event)[0]
@@ -86,7 +89,10 @@ class PMapsReader(object):
             return self._s1[min_index:max_index]
 
 
-    def s1Pmt(self, event):
+    def s1Pmt(self, event=None):
+
+        if event is None:
+            event = self._event
 
         # Make a slice of the s1 object:
         indexes = numpy.where(self._s1Pmt['event'] == event)[0]
@@ -99,7 +105,10 @@ class PMapsReader(object):
             assert len(indexes) == max_index - min_index
             return self._s1Pmt[min_index:max_index]
 
-    def s2(self, event):
+    def s2(self, event=None):
+
+        if event is None:
+            event = self._event
 
         # Make a slice of the s1 object:
         indexes = numpy.where(self._s2['event'] == event)[0]
@@ -113,7 +122,10 @@ class PMapsReader(object):
             return self._s2[min_index:max_index]
 
 
-    def s2Pmt(self, event):
+    def s2Pmt(self, event=None):
+
+        if event is None:
+            event = self._event
 
         # Make a slice of the s1 object:
         indexes = numpy.where(self._s2Pmt['event'] == event)[0]
@@ -126,7 +138,10 @@ class PMapsReader(object):
             assert len(indexes) == max_index - min_index
             return self._s2Pmt[min_index:max_index]
 
-    def s2Si(self, event):
+    def s2Si(self, event=None):
+
+        if event is None:
+            event = self._event
 
         # Make a slice of the s1 object:
         indexes = numpy.where(self._s2Si['event'] == event)[0]
@@ -273,8 +288,10 @@ class IOManager(object):
         Arguments:
             entry {int} -- Desired entry
         """
+
         if entry in self._entries:
             self._current_entry = entry
+            self._pmaps._event = self.event()
         else:
             print("Can't go to entry {}, entry is out of range.".format(entry))
 

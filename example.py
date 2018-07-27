@@ -1,8 +1,9 @@
 import os
+import numpy
 
 from IOManager import IOManager
 from ROOT import larcv
-
+import load_db
 
 def convert_file(input_file, output_file=None):
 
@@ -22,8 +23,9 @@ def convert_file(input_file, output_file=None):
     larcv_io.set_out_file(output_file)
     larcv_io.initialize()
 
-    # Create just one meta to use for NEXT-New
-    meta = larcv.Voxel3DMeta()
+
+    meta = get_meta()
+
 
     for entry in next_io.entries():
         # do some conversion
@@ -41,9 +43,18 @@ def convert_file(input_file, output_file=None):
         # Convert particle object
         hits = next_io.mc().hits(event)
         particles = next_io.mc().particles(event)
-        larcv_particle = larcv_io.get_data("particle", 'mcpart')
+        larcv_particle = larcv_io.get_data("particle",  "mcpart")
+        larcv_voxel    = larcv_io.get_data("sparse3d",  "mcpart")
+        larcv_cluster  = larcv_io.get_data("cluster3d", "mcpart")
+        larcv_voxel.meta(meta)
+        larcv_cluster.meta(meta)
+        save_mc(hits, particles, larcv_particle, larcv_cluster, larcv_voxel, meta)
 
-        save_mc(hits, particles, larcv_particle)
+        pmaps = next_io.pmaps()
+        larcv_voxel = larcv_io.get_data("sparse3d", "pmaps")
+        larcv_voxel.meta(meta)
+        save_pmaps(pmaps, larcv_voxel, meta)
+
 
         larcv_io.set_id(int(run), 0, int(event))
         larcv_io.save_entry()
@@ -51,18 +62,89 @@ def convert_file(input_file, output_file=None):
 
     larcv_io.finalize()
 
-def save_mc(hits, particles, larcv_particle):
+def save_mc(hits, particles, larcv_particle_set, larcv_cluster3d, larcv_voxel3d, meta):
 
     print "Number of particles: "  + str(len(particles))
     print "Number of hits: " + str(len(hits))
 
     print particles.dtype
+    particle_index_mapping = dict()
+    i = 0
+    for particle in particles:
+        larcv_particle = larcv.Particle()
+        larcv_particle.id(i)
+        larcv_particle.track_id(int(particle['particle_indx']))
+        particle_index_mapping[particle['particle_indx']] = i
+        larcv_particle.parent_track_id(int(particle['mother_indx']))
+        larcv_particle_set.append(larcv_particle)
+        i += 1;
+        # print particle
+
+    print particle_index_mapping
+    # Create a set of clusters to match the length of the particles:
+    larcv_cluster3d.resize(i + 1)
+
+
     print hits.dtype
 
-    particle = larcv.Particle()
+    for hit in hits:
+        xyz = hit['hit_position']
+        larcv_voxel3d.emplace(xyz[0], xyz[1],xyz[2], hit['hit_energy'])
+        # Get the particle index of this hit:
+        if hit['particle_indx'] in particle_index_mapping.keys():
+            idx = particle_index_mapping[int(hit['particle_indx'])]
+        else:
+            idx = i
+        larcv_voxel_index = meta.id(xyz[0],xyz[1],xyz[2])
+        voxel = larcv.Voxel(larcv_voxel_index, hit['hit_energy'])
+        larcv_cluster3d.writeable_voxel_set(idx).add(voxel)
 
-    larcv_particle.append(particle)
 
+def save_pmaps(pmaps, larcv_voxel, meta):
+
+    # print pmaps.s1()
+    # print pmaps.s2()
+    # print pmaps.s1Pmt()
+    # print pmaps.s2Pmt()
+    # print pmaps.s2Si()
+
+    # larcv_voxel.emplace(x=1,y=2,z=3,val=4)
+    larcv_voxel.emplace(1,2,3,4)
+
+    return
+
+def get_meta():
+
+    # Read in the database to get the pmt and sipm locations:
+    pmt_locations = load_db.DataPMT()
+    sipm_locations = load_db.DataSiPM()
+    det_geo = load_db.DetectorGeo()
+
+    min_x = numpy.min(sipm_locations.X)
+    max_x = numpy.max(sipm_locations.X)
+    min_y = numpy.min(sipm_locations.Y)
+    max_y = numpy.max(sipm_locations.Y)
+    min_z = det_geo.ZMIN
+    max_z = det_geo.ZMAX
+
+    n_x = int(max_x - min_x)
+    n_y = int(max_y - min_y)
+    n_z = int(max_z - min_z)
+
+    # Create just one meta to use for NEXT-New
+    meta = larcv.Voxel3DMeta()
+    meta.set(min_x,
+             min_y,
+             min_z,
+             max_x,
+             max_y,
+             max_z,
+             n_x,
+             n_y,
+             n_z)
+
+
+    return meta
 
 if __name__ == '__main__':
     convert_file("nexus_ACTIVE_10bar_EPEM_detsim.next_10000.root.diomira.irene.h5")
