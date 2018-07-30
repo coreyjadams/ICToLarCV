@@ -212,8 +212,6 @@ class Converter(object):
 
             # Get the time from previous S2 dictionary, and save time and energy
             e = pmaps.s2Si()['ene'][i]
-            # if e == 0.0:
-            #     continue
             t = s2_dict[peak_number][0][len(current_sipms[0])]
             current_sipms[0].append(t)
             current_sipms[1].append(e)
@@ -222,7 +220,8 @@ class Converter(object):
             y = self._sipm_locations.Y[sipm_number]
             z = 1e-3*t - t0
 
-            larcv_voxel.emplace(x, y, z, e)
+            if e > 0.00001:
+                larcv_voxel.emplace(x, y, z, e)
 
         return True
 
