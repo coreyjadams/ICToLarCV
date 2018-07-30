@@ -10,7 +10,7 @@ from ParticleConverter import ParticleConverter
 class Converter(object):
 
     def __init__(self):
-        super(self, Converter).__init__()
+        super(Converter, self).__init__()
 
         # Pointers to the files:
         self._input_file  = None
@@ -58,16 +58,16 @@ class Converter(object):
         '''
 
         # Read in the database to get the pmt and sipm locations:
-        self.pmt_locations  = load_db.DataPMT()
-        self.sipm_locations = load_db.DataSiPM()
-        self.det_geo        = load_db.DetectorGeo()
+        self._pmt_locations  = load_db.DataPMT()
+        self._sipm_locations = load_db.DataSiPM()
+        self._det_geo        = load_db.DetectorGeo()
 
-        min_x = numpy.min(self.sipm_locations.X)
-        max_x = numpy.max(self.sipm_locations.X)
-        min_y = numpy.min(self.sipm_locations.Y)
-        max_y = numpy.max(self.sipm_locations.Y)
-        min_z = self.det_geo.ZMIN
-        max_z = self.det_geo.ZMAX
+        min_x = numpy.min(self._sipm_locations.X)
+        max_x = numpy.max(self._sipm_locations.X)
+        min_y = numpy.min(self._sipm_locations.Y)
+        max_y = numpy.max(self._sipm_locations.Y)
+        min_z = self._det_geo.ZMIN
+        max_z = self._det_geo.ZMAX
 
         n_x = int(max_x - min_x)
         n_y = int(max_y - min_y)
@@ -99,13 +99,18 @@ class Converter(object):
             raise Exception("No next IO manager found.")
 
         # Convert particle object
-        hits        = self._next_io.mc().hits(event)
-        particles   = self._next_io.mc().particles(event)
-        larcv_particle = self._larcv_io.get_data("particle",  "mcpart")
-        larcv_voxel    = self._larcv_io.get_data("sparse3d",  "mcpart")
-        larcv_cluster  = self._larcv_io.get_data("cluster3d", "mcpart")
-        larcv_voxel.meta(self._mc_meta)
-        larcv_cluster.meta(self._mc_meta)
+        hits        = self._next_io.mc().hits(self._event)
+        particles   = self._next_io.mc().particles(self._event)
+        larcv_particle_set = self._larcv_io.get_data("particle",  "mcpart")
+        larcv_voxel3d      = self._larcv_io.get_data("sparse3d",  "mcpart")
+        larcv_cluster3d    = self._larcv_io.get_data("cluster3d", "mcpart")
+        larcv_particle_set.clear()
+        larcv_voxel3d.clear()
+        larcv_cluster3d.clear()
+
+
+        larcv_voxel3d.meta(self._mc_meta)
+        larcv_cluster3d.meta(self._mc_meta)
 
 
         particle_index_mapping = dict()
@@ -116,7 +121,7 @@ class Converter(object):
             larcv_particle.track_id(int(particle['particle_indx']))
             particle_index_mapping[particle['particle_indx']] = i
             larcv_particle.parent_track_id(int(particle['mother_indx']))
-            larcv_particle.pdg_code(pc.get_pdg(particles[i]['particle_name']))
+            larcv_particle.pdg_code(self._pc.get_pdg(particles[i]['particle_name']))
             larcv_particle.position(particle['initial_vertex'][0], particle['initial_vertex'][1], particle['initial_vertex'][2], particle['initial_vertex'][3])
             larcv_particle.end_position(particle['final_vertex'][0], particle['final_vertex'][1], particle['final_vertex'][2], particle['final_vertex'][3])
             # Momentum:
@@ -134,17 +139,19 @@ class Converter(object):
 
         for hit in hits:
             xyz = hit['hit_position']
-            larcv_voxel.emplace(xyz[0], xyz[1],xyz[2], hit['hit_energy'])
+            larcv_voxel3d.emplace(xyz[0], xyz[1],xyz[2], hit['hit_energy'])
             # Get the particle index of this hit:
             if hit['particle_indx'] in particle_index_mapping.keys():
                 idx = particle_index_mapping[int(hit['particle_indx'])]
             else:
                 idx = i
-            larcv_voxel_index = meta.id(xyz[0],xyz[1],xyz[2])
+            larcv_voxel_index = self._mc_meta.id(xyz[0],xyz[1],xyz[2])
             voxel = larcv.Voxel(larcv_voxel_index, hit['hit_energy'])
-            larcv_cluster.writeable_voxel_set(idx).add(voxel)
+            larcv_cluster3d.writeable_voxel_set(idx).add(voxel)
 
 
+
+        return True
 
 
     def convert_pmaps(self):
@@ -156,12 +163,71 @@ class Converter(object):
             raise Exception("No next IO manager found.")
 
 
-        pmaps = next_io.pmaps()
-        larcv_voxel = larcv_io.get_data("sparse3d", "pmaps")
-        larcv_voxel.meta(pmaps_meta)
+        pmaps = self._next_io.pmaps()
+        larcv_voxel = self._larcv_io.get_data("sparse3d", "pmaps")
+        larcv_voxel.clear()
+        larcv_voxel.meta(self._pmaps_meta)
+
+        # Get the sipms location
+        _sipm_locations = load_db.DataSiPM()
 
 
-    def event_loop(self, max_entries = None):
+        # Use S1 to get t0
+        if pmaps.s1() is None:
+            return False
+        if pmaps.s2Pmt() is None:
+            return False
+        if pmaps.s2Si() is None:
+            return False
+
+        s1_peak_time_idx = numpy.argmax(numpy.asarray(pmaps.s1()['ene']))
+        t0 = pmaps.s1()['time'][s1_peak_time_idx]
+        t0 *= 1e-3
+
+
+        # Covert the S2 df to a dictionary
+        s2_dict = {}
+
+        for i in xrange(0, len(pmaps.s2())):
+            current_peak = s2_dict.setdefault(pmaps.s2()['peak'][i], ([], []))
+            current_peak[0].append(pmaps.s2()['time'][i])
+            current_peak[1].append(pmaps.s2()['ene'][i])
+
+
+        # print 's2_dict', s2_dict
+
+
+        # Covert the S2Si df to a dictionary
+        # s2si_dict is a dictionary {peak number, sipms dictionary}
+        # 'sipms dictionary' is a dictionary {sipms number, time and energy arrays}
+        s2si_dict = {}
+
+        for i in xrange(0, len(pmaps.s2Si())):
+
+            peak_number = pmaps.s2Si()['peak'][i]
+            sipm_number = pmaps.s2Si()['nsipm'][i]
+
+            current_peak  = s2si_dict.setdefault   (peak_number, {}      )
+            current_sipms = current_peak.setdefault(sipm_number, ([], []))
+
+            # Get the time from previous S2 dictionary, and save time and energy
+            e = pmaps.s2Si()['ene'][i]
+            # if e == 0.0:
+            #     continue
+            t = s2_dict[peak_number][0][len(current_sipms[0])]
+            current_sipms[0].append(t)
+            current_sipms[1].append(e)
+
+            x = self._sipm_locations.X[sipm_number]
+            y = self._sipm_locations.Y[sipm_number]
+            z = 1e-3*t - t0
+
+            larcv_voxel.emplace(x, y, z, e)
+
+        return True
+
+
+    def event_loop(self, max_entries = 10):
 
         if not self._initialized:
             raise Exception("Need to initialize before event loop.")
@@ -172,113 +238,32 @@ class Converter(object):
             # Read the entry in the next IO:
             self._next_io.go_to_entry(entry)
 
-            event = self._next_io.event()
-            run = self._next_io.run()
+            self._entry = entry
+            self._event = self._next_io.event()
+            self._run = self._next_io.run()
 
-            if run < 0:
-                run = 0
+            if self._run < 0:
+                self._run = 0
 
             ##########################
             # Do the conversions here.
             ##########################
-            self.convert_mc_information()
-            self.convert_pmaps()
+            _ok = self.convert_mc_information()
+            _ok = self.convert_pmaps() and _ok
 
 
 
-
-            larcv_io.set_id(int(run), 0, int(event))
-            larcv_io.save_entry()
+            if _ok:
+                self._larcv_io.set_id(int(self._run), 0, int(self._event))
+                self._larcv_io.save_entry()
 
             if max_entries is not None and entry > max_entries:
                 break
 
-        larcv_io.finalize()
-
-
-def save_pmaps(pmaps, larcv_voxel, meta):
-
-    # The code that parses pmaps for visualization is here:
-    # https://github.com/coreyjadams/IC/blob/master/invisible_cities/viewer/datatypes/PMap.py#L80-L89
-
-    # A lot of the functions there are not implemented for the hacked IO of the hdf5 files
-    # We will have to figure them out
-
-
-    # Get the sipms location
-    sipm_locations = load_db.DataSiPM()
-
-
-    # Use S1 to get t0
-    print len(pmaps.s1())
-    s1_peak_time_idx = numpy.argmax(numpy.asarray(pmaps.s1()['ene']))
-    t0 = numpy.asarray(pmaps.s1()['time'])[s1_peak_time_idx]
-    t0 *= 1e-3
-
-
-    # Covert the S2 df to a dictionary
-    s2_dict = {}
-
-    for i in xrange(0, len(pmaps.s2())):
-        current_peak = s2_dict.setdefault(pmaps.s2()['peak'][i], ([], []))
-        current_peak[0].append(pmaps.s2()['time'][i])
-        current_peak[1].append(pmaps.s2()['ene'][i])
-
-
-    # print 's2_dict', s2_dict
-    print 'Number of peaks', len(s2_dict)
-
-
-    # Covert the S2Si df to a dictionary
-    # s2si_dict is a dictionary {peak number, sipms dictionary}
-    # 'sipms dictionary' is a dictionary {sipms number, time and energy arrays}
-    s2si_dict = {}
-
-    for i in xrange(0, len(pmaps.s2Si())):
-
-        peak_number = pmaps.s2Si()['peak'][i]
-        sipm_number = pmaps.s2Si()['nsipm'][i]
-
-        current_peak  = s2si_dict.setdefault   (peak_number, {}      )
-        current_sipms = current_peak.setdefault(sipm_number, ([], []))
-
-        # Get the time from previous S2 dictionary, and save time and energy
-        t = s2_dict[peak_number][0][len(current_sipms[0])]
-        e = pmaps.s2Si()['ene'][i]
-        current_sipms[0].append(t)
-        current_sipms[1].append(e)
-
-        x = sipm_locations.X[sipm_number]
-        y = sipm_locations.Y[sipm_number]
-        z = 1e-3*t - t0
-
-        larcv_voxel.emplace(x, y, z, e)
-
-
-
-
-
-
-    # # Loop over peaks, then sipms, then time ticks
-    # # For each time tick create a voxel
-    # for peak in s2_dict:
-    #     for sipm in s2si_dict[peak]:
-    #         for t, e in zip(s2si_dict[peak][sipm][0], s2si_dict[peak][sipm][1]):
-    #             x = sipm_locations.X[sipm]
-    #             y = sipm_locations.Y[sipm]
-    #             z = 1e-3*t - t0
-    #             # print 'sipm location', x, y, z
-    #             larcv_voxel.emplace(x, y, z, e)
-
-
-    # larcv_voxel.emplace(x=1,y=2,z=3,val=4)
-    # larcv_voxel.emplace(1,2,3,4)
-
-    return
-
-def get_meta(pmaps=False):
+        self._larcv_io.finalize()
 
 
 if __name__ == '__main__':
-    convert_file("nexus_ACTIVE_10bar_EPEM_detsim.next_10000.root.diomira.irene.h5")
+    c = Converter()
+    c.convert("nexus_ACTIVE_10bar_EPEM_detsim.next_10000.root.diomira.irene.h5")
 
