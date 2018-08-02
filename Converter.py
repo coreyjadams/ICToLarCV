@@ -3,6 +3,7 @@ import numpy
 
 from IOManager import IOManager
 from ROOT import larcv
+import ROOT
 import load_db
 from ParticleConverter import ParticleConverter
 
@@ -168,6 +169,8 @@ class Converter(object):
         larcv_voxel.clear()
         larcv_voxel.meta(self._pmaps_meta)
 
+        larcv_meta = self._larcv_io.get_data("meta", "pmaps")
+
         # Get the sipms location
         _sipm_locations = load_db.DataSiPM()
 
@@ -222,6 +225,35 @@ class Converter(object):
 
             if e > 0.00001:
                 larcv_voxel.emplace(x, y, z, e)
+
+
+        # Covert the S2PMT df to a dictionary
+        # s2pmt_dict is a dictionary {peak number, pmt dictionary}
+        # 'pmt dictionary' is a dictionary {pmt number, time and energy arrays}
+        s2pmt_dict = {}
+
+        times = ROOT.std.vector('double')()
+        energies = ROOT.std.vector('double')()
+
+        for i in xrange(0, len(pmaps.s2Pmt())):
+
+            peak_number = pmaps.s2Pmt()['peak'][i]
+            pmt_number = pmaps.s2Pmt()['npmt'][i]
+
+            current_peak  = s2pmt_dict.setdefault  (peak_number, {}      )
+            current_pmts  = current_peak.setdefault(pmt_number,  ([], []))
+
+            # Get the time from previous S2 dictionary, and save time and energy
+            e = pmaps.s2Pmt()['ene'][i]
+            t = s2_dict[peak_number][0][len(current_pmts[0])]
+            current_pmts[0].append(t)
+            current_pmts[1].append(e)
+
+            times.push_back(t)
+            energies.push_back(e)
+
+        larcv_meta.store("s2pmt_time", times)
+        larcv_meta.store("s2pmt_energy", energies)
 
         return True
 
