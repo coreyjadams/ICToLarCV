@@ -277,7 +277,7 @@ class IOManager(object):
         Returns:
             int -- Total number of events
         """
-        return _max_entry
+        return self._max_entry
 
     def go_to_entry(self,entry):
         """Move the current index to the specified entry
