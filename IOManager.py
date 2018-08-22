@@ -234,9 +234,11 @@ class IOManager(object):
         self._entries = numpy.arange(0, self._max_entry)
 
 
+
         self._mc = MCReader(self._file['MC'])
         self._pmaps = PMapsReader(self._file['PMAPS'])
 
+        print "OK"
 
     def pmaps(self):
         """Return the pmap object for selected entry

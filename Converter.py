@@ -1,4 +1,4 @@
-import os
+import os, sys
 import numpy
 
 from IOManager import IOManager
@@ -25,7 +25,7 @@ class Converter(object):
 
         self._pc = ParticleConverter()
 
-    def convert(self, _file_in, _file_out = None):
+    def convert(self, _file_in, _file_out = None, max_entries = None):
 
         # if there is not an output file, the output is the input with a new file extension:
         if _file_out is None:
@@ -50,7 +50,7 @@ class Converter(object):
         self._larcv_io.set_out_file(self._output_file)
         self._larcv_io.initialize()
 
-        self.event_loop()
+        self.event_loop(max_entries = max_entries)
 
     def initialize_geometry(self):
         '''Set up and cache the geometry information
@@ -92,6 +92,7 @@ class Converter(object):
         return
 
     def convert_mc_information(self):
+
 
         if self._larcv_io is None:
             raise Exception("No larcv IO manager found.")
@@ -151,11 +152,12 @@ class Converter(object):
             larcv_cluster3d.writeable_voxel_set(idx).add(voxel)
 
 
-
         return True
 
 
     def convert_pmaps(self):
+
+        print "Converting pmaps"
 
         if self._larcv_io is None:
             raise Exception("No larcv IO manager found.")
@@ -174,6 +176,8 @@ class Converter(object):
         # Get the sipms location
         _sipm_locations = load_db.DataSiPM()
 
+
+        print "Got all data"
 
         # Use S1 to get t0
         if pmaps.s1() is None:
@@ -197,6 +201,7 @@ class Converter(object):
             current_peak[1].append(pmaps.s2()['ene'][i])
 
 
+        print "s2 converted to dict"
         # print 's2_dict', s2_dict
 
 
@@ -204,6 +209,8 @@ class Converter(object):
         # s2si_dict is a dictionary {peak number, sipms dictionary}
         # 'sipms dictionary' is a dictionary {sipms number, time and energy arrays}
         s2si_dict = {}
+
+        print len(pmaps.s2Si())
 
         for i in xrange(0, len(pmaps.s2Si())):
 
@@ -227,6 +234,7 @@ class Converter(object):
                 larcv_voxel.emplace(x, y, z, e)
 
 
+        print "s2si saved"
         # Covert the S2PMT df to a dictionary
         # s2pmt_dict is a dictionary {peak number, pmt dictionary}
         # 'pmt dictionary' is a dictionary {pmt number, time and energy arrays}
@@ -255,16 +263,23 @@ class Converter(object):
         larcv_meta.store("s2pmt_time", times)
         larcv_meta.store("s2pmt_energy", energies)
 
+        print "Finished converting pmaps"
+
         return True
 
 
-    def event_loop(self, max_entries = 10):
+    def event_loop(self, max_entries=None):
 
         if not self._initialized:
             raise Exception("Need to initialize before event loop.")
 
-
+        entry_count = 0
         for entry in self._next_io.entries():
+
+            print entry
+
+            if entry_count % 1 == 0:
+                sys.stdout.write("Processed entry {}.\n".format(entry_count))
 
             # Read the entry in the next IO:
             self._next_io.go_to_entry(entry)
@@ -282,19 +297,17 @@ class Converter(object):
             _ok = self.convert_mc_information()
             _ok = self.convert_pmaps() and _ok
 
+            print _ok
 
 
             if _ok:
                 self._larcv_io.set_id(int(self._run), 0, int(self._event))
                 self._larcv_io.save_entry()
+                entry_count += 1
 
             if max_entries is not None and entry > max_entries:
                 break
 
         self._larcv_io.finalize()
 
-
-if __name__ == '__main__':
-    c = Converter()
-    c.convert("nexus_ACTIVE_10bar_EPEM_detsim.next_10000.root.diomira.irene.h5")
-
+        sys.stdout.write("Total number of entries converted: {}\n".format(entry_count))
