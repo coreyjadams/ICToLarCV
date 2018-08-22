@@ -71,21 +71,36 @@ class PMapsReader(object):
         self._s2Pmt = self._group['S2Pmt']
         self._s2Si  = self._group['S2Si']
         self._event = None
+        self._current_indeces_s1 = None
+        self._current_indeces_s1pmt = None
+        self._current_indeces_s2 = None
+        self._current_indeces_s2si = None
+        self._current_indeces_s2pmt = None
+
+    def set_event(self, evt_no=0):
+
+        self._event = evt_no
+
+        # Make a slice of the s1, s1pmt, s2, s2si, s2pmt objects:
+        self._current_indeces_s1 = numpy.where(self._s1['event'] == self._event)[0]
+        self._current_indeces_s1pmt = numpy.where(self._s1Pmt['event'] == self._event)[0]
+        self._current_indeces_s2 = numpy.where(self._s2['event'] == self._event)[0]
+        self._current_indeces_s2si = numpy.where(self._s2Si['event'] == self._event)[0]
+        self._current_indeces_s2pmt = numpy.where(self._s2Pmt['event'] == self._event)[0]
+
 
     def s1(self, event=None):
 
         if event is None:
             event = self._event
 
-        # Make a slice of the s1 object:
-        indexes = numpy.where(self._s1['event'] == event)[0]
-        if len(indexes) == 0:
+        if len(self._current_indeces_s1) == 0:
             return None
         else:
-            min_index = numpy.min(indexes)
-            max_index = numpy.max(indexes) + 1
+            min_index = numpy.min(self._current_indeces_s1)
+            max_index = numpy.max(self._current_indeces_s1) + 1
             # This is a basic contiguiousness check (sp?  how do you spell that?)
-            assert len(indexes) == max_index - min_index
+            assert len(self._current_indeces_s1) == max_index - min_index
             return self._s1[min_index:max_index]
 
 
@@ -94,15 +109,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        # Make a slice of the s1 object:
-        indexes = numpy.where(self._s1Pmt['event'] == event)[0]
-        if len(indexes) == 0:
+        if len(self._current_indeces_s1pmt) == 0:
             return None
         else:
-            min_index = numpy.min(indexes)
-            max_index = numpy.max(indexes) + 1
+            min_index = numpy.min(self._current_indeces_s1pmt)
+            max_index = numpy.max(self._current_indeces_s1pmt) + 1
             # This is a basic contiguiousness check (sp?  how do you spell that?)
-            assert len(indexes) == max_index - min_index
+            assert len(self._current_indeces_s1pmt) == max_index - min_index
             return self._s1Pmt[min_index:max_index]
 
     def s2(self, event=None):
@@ -110,15 +123,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        # Make a slice of the s1 object:
-        indexes = numpy.where(self._s2['event'] == event)[0]
-        if len(indexes) == 0:
+        if len(self._current_indeces_s2) == 0:
             return None
         else:
-            min_index = numpy.min(indexes)
-            max_index = numpy.max(indexes) + 1
+            min_index = numpy.min(self._current_indeces_s2)
+            max_index = numpy.max(self._current_indeces_s2) + 1
             # continuity assertion:
-            assert len(indexes) == max_index - min_index
+            assert len(self._current_indeces_s2) == max_index - min_index
             return self._s2[min_index:max_index]
 
 
@@ -127,15 +138,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        # Make a slice of the s1 object:
-        indexes = numpy.where(self._s2Pmt['event'] == event)[0]
-        if len(indexes) == 0:
+        if len(self._current_indeces_s2pmt) == 0:
             return None
         else:
-            min_index = numpy.min(indexes)
-            max_index = numpy.max(indexes) + 1
+            min_index = numpy.min(self._current_indeces_s2pmt)
+            max_index = numpy.max(self._current_indeces_s2pmt) + 1
             # continuity assertion:
-            assert len(indexes) == max_index - min_index
+            assert len(self._current_indeces_s2pmt) == max_index - min_index
             return self._s2Pmt[min_index:max_index]
 
     def s2Si(self, event=None):
@@ -143,15 +152,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        # Make a slice of the s1 object:
-        indexes = numpy.where(self._s2Si['event'] == event)[0]
-        if len(indexes) == 0:
+        if len(self._current_indeces_s2si) == 0:
             return None
         else:
-            min_index = numpy.min(indexes)
-            max_index = numpy.max(indexes) + 1
+            min_index = numpy.min(self._current_indeces_s2si)
+            max_index = numpy.max(self._current_indeces_s2si) + 1
             # continuity assertion:
-            assert len(indexes) == max_index - min_index
+            assert len(self._current_indeces_s2si) == max_index - min_index
             return self._s2Si[min_index:max_index]
 
 
@@ -293,7 +300,7 @@ class IOManager(object):
 
         if entry in self._entries:
             self._current_entry = entry
-            self._pmaps._event = self.event()
+            self._pmaps.set_event(self.event())
         else:
             print("Can't go to entry {}, entry is out of range.".format(entry))
 

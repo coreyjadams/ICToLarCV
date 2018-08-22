@@ -157,8 +157,6 @@ class Converter(object):
 
     def convert_pmaps(self):
 
-        print "Converting pmaps"
-
         if self._larcv_io is None:
             raise Exception("No larcv IO manager found.")
 
@@ -176,8 +174,6 @@ class Converter(object):
         # Get the sipms location
         _sipm_locations = load_db.DataSiPM()
 
-
-        print "Got all data"
 
         # Use S1 to get t0
         if pmaps.s1() is None:
@@ -201,7 +197,6 @@ class Converter(object):
             current_peak[1].append(pmaps.s2()['ene'][i])
 
 
-        print "s2 converted to dict"
         # print 's2_dict', s2_dict
 
 
@@ -209,8 +204,6 @@ class Converter(object):
         # s2si_dict is a dictionary {peak number, sipms dictionary}
         # 'sipms dictionary' is a dictionary {sipms number, time and energy arrays}
         s2si_dict = {}
-
-        print len(pmaps.s2Si())
 
         for i in xrange(0, len(pmaps.s2Si())):
 
@@ -234,7 +227,7 @@ class Converter(object):
                 larcv_voxel.emplace(x, y, z, e)
 
 
-        print "s2si saved"
+
         # Covert the S2PMT df to a dictionary
         # s2pmt_dict is a dictionary {peak number, pmt dictionary}
         # 'pmt dictionary' is a dictionary {pmt number, time and energy arrays}
@@ -263,8 +256,6 @@ class Converter(object):
         larcv_meta.store("s2pmt_time", times)
         larcv_meta.store("s2pmt_energy", energies)
 
-        print "Finished converting pmaps"
-
         return True
 
 
@@ -275,8 +266,6 @@ class Converter(object):
 
         entry_count = 0
         for entry in self._next_io.entries():
-
-            print entry
 
             if entry_count % 1 == 0:
                 sys.stdout.write("Processed entry {}.\n".format(entry_count))
@@ -297,7 +286,7 @@ class Converter(object):
             _ok = self.convert_mc_information()
             _ok = self.convert_pmaps() and _ok
 
-            print _ok
+            # print _ok
 
 
             if _ok:
