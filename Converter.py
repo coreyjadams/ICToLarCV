@@ -80,6 +80,8 @@ class Converter(object):
                           max_x, max_y, max_z,
                           n_x, n_y, n_z)
 
+        print '_sipm_locations.X', _sipm_locations.X
+        print '_sipm_locations.Y', _sipm_locations.Y
 
         n_x = n_x / 10
         n_y = n_y / 10
@@ -172,7 +174,7 @@ class Converter(object):
         larcv_meta = self._larcv_io.get_data("meta", "pmaps")
 
         # Get the sipms location
-        _sipm_locations = load_db.DataSiPM()
+        # _sipm_locations = load_db.DataSiPM()
 
 
         # Use S1 to get t0
