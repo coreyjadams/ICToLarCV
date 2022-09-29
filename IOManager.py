@@ -71,22 +71,22 @@ class PMapsReader(object):
         self._s2Pmt = self._group['S2Pmt']
         self._s2Si  = self._group['S2Si']
         self._event = None
-        self._current_indeces_s1 = None
-        self._current_indeces_s1pmt = None
-        self._current_indeces_s2 = None
-        self._current_indeces_s2si = None
-        self._current_indeces_s2pmt = None
+        self._current_indexes_s1 = None
+        self._current_indexes_s1pmt = None
+        self._current_indexes_s2 = None
+        self._current_indexes_s2si = None
+        self._current_indexes_s2pmt = None
 
     def set_event(self, evt_no=0):
 
         self._event = evt_no
 
         # Make a slice of the s1, s1pmt, s2, s2si, s2pmt objects:
-        self._current_indeces_s1 = numpy.where(self._s1['event'] == self._event)[0]
-        self._current_indeces_s1pmt = numpy.where(self._s1Pmt['event'] == self._event)[0]
-        self._current_indeces_s2 = numpy.where(self._s2['event'] == self._event)[0]
-        self._current_indeces_s2si = numpy.where(self._s2Si['event'] == self._event)[0]
-        self._current_indeces_s2pmt = numpy.where(self._s2Pmt['event'] == self._event)[0]
+        self._current_indexes_s1 = numpy.where(self._s1['event'] == self._event)[0]
+        self._current_indexes_s1pmt = numpy.where(self._s1Pmt['event'] == self._event)[0]
+        self._current_indexes_s2 = numpy.where(self._s2['event'] == self._event)[0]
+        self._current_indexes_s2si = numpy.where(self._s2Si['event'] == self._event)[0]
+        self._current_indexes_s2pmt = numpy.where(self._s2Pmt['event'] == self._event)[0]
 
 
     def s1(self, event=None):
@@ -94,13 +94,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        if len(self._current_indeces_s1) == 0:
+        if len(self._current_indexes_s1) == 0:
             return None
         else:
-            min_index = numpy.min(self._current_indeces_s1)
-            max_index = numpy.max(self._current_indeces_s1) + 1
+            min_index = numpy.min(self._current_indexes_s1)
+            max_index = numpy.max(self._current_indexes_s1) + 1
             # This is a basic contiguiousness check (sp?  how do you spell that?)
-            assert len(self._current_indeces_s1) == max_index - min_index
+            assert len(self._current_indexes_s1) == max_index - min_index
             return self._s1[min_index:max_index]
 
 
@@ -109,13 +109,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        if len(self._current_indeces_s1pmt) == 0:
+        if len(self._current_indexes_s1pmt) == 0:
             return None
         else:
-            min_index = numpy.min(self._current_indeces_s1pmt)
-            max_index = numpy.max(self._current_indeces_s1pmt) + 1
+            min_index = numpy.min(self._current_indexes_s1pmt)
+            max_index = numpy.max(self._current_indexes_s1pmt) + 1
             # This is a basic contiguiousness check (sp?  how do you spell that?)
-            assert len(self._current_indeces_s1pmt) == max_index - min_index
+            assert len(self._current_indexes_s1pmt) == max_index - min_index
             return self._s1Pmt[min_index:max_index]
 
     def s2(self, event=None):
@@ -123,13 +123,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        if len(self._current_indeces_s2) == 0:
+        if len(self._current_indexes_s2) == 0:
             return None
         else:
-            min_index = numpy.min(self._current_indeces_s2)
-            max_index = numpy.max(self._current_indeces_s2) + 1
+            min_index = numpy.min(self._current_indexes_s2)
+            max_index = numpy.max(self._current_indexes_s2) + 1
             # continuity assertion:
-            assert len(self._current_indeces_s2) == max_index - min_index
+            assert len(self._current_indexes_s2) == max_index - min_index
             return self._s2[min_index:max_index]
 
 
@@ -138,13 +138,13 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        if len(self._current_indeces_s2pmt) == 0:
+        if len(self._current_indexes_s2pmt) == 0:
             return None
         else:
-            min_index = numpy.min(self._current_indeces_s2pmt)
-            max_index = numpy.max(self._current_indeces_s2pmt) + 1
+            min_index = numpy.min(self._current_indexes_s2pmt)
+            max_index = numpy.max(self._current_indexes_s2pmt) + 1
             # continuity assertion:
-            assert len(self._current_indeces_s2pmt) == max_index - min_index
+            assert len(self._current_indexes_s2pmt) == max_index - min_index
             return self._s2Pmt[min_index:max_index]
 
     def s2Si(self, event=None):
@@ -152,15 +152,40 @@ class PMapsReader(object):
         if event is None:
             event = self._event
 
-        if len(self._current_indeces_s2si) == 0:
+        if len(self._current_indexes_s2si) == 0:
             return None
         else:
-            min_index = numpy.min(self._current_indeces_s2si)
-            max_index = numpy.max(self._current_indeces_s2si) + 1
+            min_index = numpy.min(self._current_indexes_s2si)
+            max_index = numpy.max(self._current_indexes_s2si) + 1
             # continuity assertion:
-            assert len(self._current_indeces_s2si) == max_index - min_index
+            assert len(self._current_indexes_s2si) == max_index - min_index
             return self._s2Si[min_index:max_index]
 
+class RecoReader(object):
+
+
+
+    def __init__(self, mc_group):
+        super(RecoReader, self).__init__()
+        self._group = mc_group
+
+        # Read the extents:
+        self._events = self._group['Events']
+        self._event  = None
+
+
+    def hits(self, event=None):
+        min_index = numpy.min(self._current_reco_indexes)
+        max_index = numpy.max(self._current_reco_indexes) + 1
+        assert len(self._current_reco_indexes) == max_index - min_index
+        return self._events[min_index:max_index]
+
+    def set_event(self, evt_no=0):
+
+        self._event = evt_no
+
+        # Make a slice of the s1, s1pmt, s2, s2si, s2pmt objects:
+        self._current_reco_indexes = numpy.where(self._events['event'] == self._event)[0]
 
 
 
@@ -177,9 +202,10 @@ class IOManager(object):
 
         # Current entry in the above list
         self._current_entry = 0
-        self._file = None
-        self._mc = None
-        self._pmaps = None
+        self._file   = None
+        self._mc     = None
+        self._pmaps  = None
+        self._reco   = None
         self._events = None
 
     def event(self):
@@ -243,9 +269,17 @@ class IOManager(object):
 
 
         self._mc = MCReader(self._file['MC'])
-        self._pmaps = PMapsReader(self._file['PMAPS'])
+        if 'PMAPS' in self._file.keys():
+            self._pmaps = PMapsReader(self._file['PMAPS'])
+        else:
+            self._pmaps = None
 
-        print "OK"
+        if 'RECO' in self._file.keys():
+            self._reco = RecoReader(self._file['RECO'])
+        else:
+            self._reco = None
+
+        print("OK")
 
     def pmaps(self):
         """Return the pmap object for selected entry
@@ -280,6 +314,10 @@ class IOManager(object):
         return self._mc
 
 
+    def reco(self):
+
+        return self._reco
+
     def num_events(self):
         """Query for the total number of events in this file
 
@@ -300,7 +338,10 @@ class IOManager(object):
 
         if entry in self._entries:
             self._current_entry = entry
-            self._pmaps.set_event(self.event())
+            if self._pmaps is not None:
+                self._pmaps.set_event(self.event())
+            if self._reco is not None:
+                self._reco.set_event(self.event())
         else:
             print("Can't go to entry {}, entry is out of range.".format(entry))
 

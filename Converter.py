@@ -2,8 +2,7 @@ import os, sys
 import numpy
 
 from IOManager import IOManager
-from ROOT import larcv
-import ROOT
+from larcv import larcv
 import load_db
 from ParticleConverter import ParticleConverter
 
@@ -31,7 +30,7 @@ class Converter(object):
         if _file_out is None:
             directory = os.path.dirname(_file_in)
             file_root = os.path.basename(_file_in)
-            _file_out = directory + os.path.splitext(file_root)[0] + '_larcv.root'
+            _file_out = directory + os.path.splitext(file_root)[0] + '_larcv.h5'
             # print _file_out
 
         self._input_file  = _file_in
@@ -75,21 +74,24 @@ class Converter(object):
         n_z = int(max_z - min_z)
 
         # Create just one meta to use for NEXT-New
-        self._mc_meta = larcv.Voxel3DMeta()
-        self._mc_meta.set(min_x, min_y, min_z,
-                          max_x, max_y, max_z,
-                          n_x, n_y, n_z)
+        self._mc_meta = larcv.ImageMeta3D()
+        self._mc_meta.set_dimension(0, float(max_x - min_x), n_x, float(min_x))
+        self._mc_meta.set_dimension(1, float(max_y - min_y), n_y, float(min_y))
+        self._mc_meta.set_dimension(2, float(max_z - min_z), n_z, float(min_z))
 
-        print '_sipm_locations.X', _sipm_locations.X
-        print '_sipm_locations.Y', _sipm_locations.Y
+        # print('_sipm_locations.X', self._sipm_locations.X)
+        # print('_sipm_locations.Y', self._sipm_locations.Y)
 
-        n_x = n_x / 10
-        n_y = n_y / 10
+        n_x = int(n_x / 10)
+        n_y = int(n_y / 10)
+        n_z = int(n_z / 2 )
 
-        self._pmaps_meta = larcv.Voxel3DMeta()
-        self._pmaps_meta.set(min_x, min_y, min_z,
-                             max_x, max_y, max_z,
-                             n_x, n_y, n_z)
+
+        self._pmaps_meta = larcv.ImageMeta3D()
+        self._pmaps_meta.set_dimension(0, float(max_x - min_x), n_x, float(min_x))
+        self._pmaps_meta.set_dimension(1, float(max_y - min_y), n_y, float(min_y))
+        self._pmaps_meta.set_dimension(2, float(max_z - min_z), n_z, float(min_z))
+
 
         return
 
@@ -105,16 +107,25 @@ class Converter(object):
         # Convert particle object
         hits        = self._next_io.mc().hits(self._event)
         particles   = self._next_io.mc().particles(self._event)
-        larcv_particle_set = self._larcv_io.get_data("particle",  "mcpart")
-        larcv_voxel3d      = self._larcv_io.get_data("sparse3d",  "mcpart")
-        larcv_cluster3d    = self._larcv_io.get_data("cluster3d", "mcpart")
+        larcv_particle_set = larcv.EventParticle.to_particle(
+            self._larcv_io.get_data("particle",  "mcpart"))
+        larcv_voxel3d      = larcv.EventSparseTensor3D.to_sparse_tensor(
+            self._larcv_io.get_data("sparse3d",  "mcpart"))
+        larcv_cluster3d    = larcv.EventSparseCluster3D.to_sparse_cluster(
+            self._larcv_io.get_data("cluster3d", "mcpart"))
         larcv_particle_set.clear()
         larcv_voxel3d.clear()
         larcv_cluster3d.clear()
 
 
-        larcv_voxel3d.meta(self._mc_meta)
-        larcv_cluster3d.meta(self._mc_meta)
+        st = larcv.SparseTensor3D()
+        st.meta(self._mc_meta)
+
+        sc = larcv.SparseCluster3D()
+        sc.meta(self._mc_meta)
+
+        # larcv_voxel3d.meta(self._mc_meta)
+        # larcv_cluster3d.meta(self._mc_meta)
 
 
         particle_index_mapping = dict()
@@ -126,33 +137,52 @@ class Converter(object):
             particle_index_mapping[particle['particle_indx']] = i
             larcv_particle.parent_track_id(int(particle['mother_indx']))
             larcv_particle.pdg_code(self._pc.get_pdg(particles[i]['particle_name']))
-            larcv_particle.position(particle['initial_vertex'][0], particle['initial_vertex'][1], particle['initial_vertex'][2], particle['initial_vertex'][3])
-            larcv_particle.end_position(particle['final_vertex'][0], particle['final_vertex'][1], particle['final_vertex'][2], particle['final_vertex'][3])
+            larcv_particle.position(
+                float(particle['initial_vertex'][0]), 
+                float(particle['initial_vertex'][1]), 
+                float(particle['initial_vertex'][2]), 
+                float(particle['initial_vertex'][3]))
+            larcv_particle.end_position(
+                float(particle['final_vertex'][0]),
+                float(particle['final_vertex'][1]),
+                float(particle['final_vertex'][2]),
+                float(particle['final_vertex'][3]))
             # Momentum:
-            larcv_particle.momentum(particle['momentum'][0], particle['momentum'][1], particle['momentum'][2])
+            larcv_particle.momentum(
+                float(particle['momentum'][0]), 
+                float(particle['momentum'][1]), 
+                float(particle['momentum'][2]))
             #kinetic energy:
-            larcv_particle.energy_init(particle['kin_energy'])
-            larcv_particle.creation_process(particle['creator_proc'])
+            larcv_particle.energy_init(float(particle['kin_energy']))
+            larcv_particle.creation_process(str(particle['creator_proc']))
 
             larcv_particle_set.append(larcv_particle)
             i += 1;
             # print particle
 
         # Create a set of clusters to match the length of the particles:
-        larcv_cluster3d.resize(i + 1)
+        sc.resize(i + 1)
 
+        loc_vector = larcv.VectorOfDouble()
+        loc_vector.resize(3)
         for hit in hits:
             xyz = hit['hit_position']
-            larcv_voxel3d.emplace(xyz[0], xyz[1],xyz[2], hit['hit_energy'])
+            loc_vector[0] = float(xyz[0])
+            loc_vector[1] = float(xyz[1])
+            loc_vector[2] = float(xyz[2])
+            index = self._mc_meta.position_to_index(loc_vector)
+            st.emplace(larcv.Voxel(index, float(hit['hit_energy'])))
             # Get the particle index of this hit:
             if hit['particle_indx'] in particle_index_mapping.keys():
                 idx = particle_index_mapping[int(hit['particle_indx'])]
             else:
                 idx = i
-            larcv_voxel_index = self._mc_meta.id(xyz[0],xyz[1],xyz[2])
-            voxel = larcv.Voxel(larcv_voxel_index, hit['hit_energy'])
-            larcv_cluster3d.writeable_voxel_set(idx).add(voxel)
+            # larcv_voxel_index = self._mc_meta.id(xyz[0],xyz[1],xyz[2])
+            voxel = larcv.Voxel(index, float(hit['hit_energy']))
+            sc.writeable_voxel_set(idx).add(voxel)
 
+        larcv_voxel3d.emplace(st)
+        larcv_cluster3d.emplace(sc)
 
         return True
 
@@ -167,6 +197,9 @@ class Converter(object):
 
 
         pmaps = self._next_io.pmaps()
+        if pmaps is None:
+            return True
+
         larcv_voxel = self._larcv_io.get_data("sparse3d", "pmaps")
         larcv_voxel.clear()
         larcv_voxel.meta(self._pmaps_meta)
@@ -235,8 +268,8 @@ class Converter(object):
         # 'pmt dictionary' is a dictionary {pmt number, time and energy arrays}
         s2pmt_dict = {}
 
-        times = ROOT.std.vector('double')()
-        energies = ROOT.std.vector('double')()
+        times = larcv.VectorOfDouble()
+        energies = larcv.VectorOfDouble()
 
         for i in xrange(0, len(pmaps.s2Pmt())):
 
@@ -260,6 +293,68 @@ class Converter(object):
 
         return True
 
+    def convert_reco(self):
+
+
+        if self._larcv_io is None:
+            raise Exception("No larcv IO manager found.")
+
+        if self._next_io is None:
+            raise Exception("No next IO manager found.")
+
+
+        reco = self._next_io.reco()
+        if reco is None:
+            return True
+
+        hits = reco.hits()
+
+        larcv_voxel_E = larcv.EventSparseTensor3D.to_sparse_tensor(
+            self._larcv_io.get_data("sparse3d", "reco_Q"))
+        larcv_voxel_Q = larcv.EventSparseTensor3D.to_sparse_tensor(
+            self._larcv_io.get_data("sparse3d", "reco_E"))
+        larcv_voxel_E.clear()
+        larcv_voxel_Q.clear()
+
+        st_Q = larcv.SparseTensor3D()
+        st_Q.meta(self._pmaps_meta)
+
+        st_E = larcv.SparseTensor3D()
+        st_E.meta(self._pmaps_meta)
+
+        position_vec = larcv.VectorOfDouble()
+        position_vec.resize(3)
+
+
+        # unique_z = numpy.unique(hits['Z'])
+        # min_z = numpy.min(unique_z)
+        # step_diff = unique_z[1:] - unique_z[:-1]
+        
+        # base_step = numpy.min(step_diff)
+
+        # print(unique_z)
+        # print(step_diff)
+        # print(base_step)
+        # print(unique_z / base_step)
+
+
+        print(self._pmaps_meta.dump())
+
+        for hit in hits:
+
+            position_vec[0] = hit['X']
+            position_vec[1] = hit['Y']
+            position_vec[2] = hit['Z']
+
+            index = self._pmaps_meta.position_to_index(position_vec)
+
+            st_Q.emplace(larcv.Voxel(index, hit['Q']))
+            st_E.emplace(larcv.Voxel(index, hit['E']))
+
+        larcv_voxel_Q.emplace(st_Q)
+        larcv_voxel_E.emplace(st_E)
+
+        return True
 
     def event_loop(self, max_entries=None):
 
@@ -287,6 +382,7 @@ class Converter(object):
             ##########################
             _ok = self.convert_mc_information()
             _ok = self.convert_pmaps() and _ok
+            _ok = self.convert_reco() and _ok
 
             # print _ok
 
